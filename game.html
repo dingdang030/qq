@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>投篮挑战</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a1a;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    touch-action: none;
+  }
+  #gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #uiLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  #scoreBoard {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  #scoreBoard .title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  #scoreBoard .score {
+    font-size: 36px;
+    font-weight: 800;
+    color: #ffd54a;
+  }
+  #scoreBoard .stats {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+  /* Joystick */
+  #joystick {
+    position: absolute;
+    bottom: 40px;
+    left: 30px;
+    width: 140px;
+    height: 140px;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  #joystickBase {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+    border: 2px solid rgba(255,255,255,0.25);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.4), inset 0 0 20px rgba(0,0,0,0.3);
+  }
+  #joystickStick {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 35% 30%, #fff, #cfd8dc 60%, #78909c);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: transform 0.05s linear;
+  }
+  /* Shoot button */
+  #shootBtn {
+    position: absolute;
+    bottom: 50px;
+    right: 30px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    pointer-events: auto;
+    touch-action: none;
+    background: radial-gradient(circle at 35% 30%, #ff8a80, #e53935 70%, #b71c1c);
+    border: 3px solid rgba(255,255,255,0.4);
+    box-shadow: 0 6px 20px rgba(183,28,28,0.5), inset 0 -8px 16px rgba(0,0,0,0.25), inset 0 8px 16px rgba(255,255,255,0.2);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    letter-spacing: 2px;
+  }
+  #shootBtn.charging {
+    transform: scale(0.92);
+    box-shadow: 0 2px 10px rgba(183,28,28,0.7), inset 0 0 30px rgba(255,255,255,0.3);
+  }
+  /* Power bar */
+  #powerBarWrap {
+    position: absolute;
+    bottom: 50px;
+    right: 180px;
+    width: 32px;
+    height: 240px;
+    pointer-events: none;
+  }
+  #powerBarLabel {
+    color: #fff;
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    letter-spacing: 1px;
+  }
+  #powerBar {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    border-radius: 16px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid rgba(255,255,255,0.3);
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  }
+  /* Color zones inside the bar (visual) */
+  #powerBarZones {
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .zone {
+    width: 100%;
+    opacity: 0.35;
+  }
+  .zone-red    { height: 30%; background: #e53935; }
+  .zone-yellow { height: 40%; background: #fdd835; }
+  .zone-green  { height: 30%; background: #43a047; }
+  #powerFill {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 0%;
+    border-radius: 14px 14px 0 0;
+    background: linear-gradient(to top, #fff 0%, currentColor 100%);
+    color: #fff;
+    transition: height 0.04s linear, background 0.05s linear, color 0.05s linear;
+    box-shadow: 0 0 12px rgba(255,255,255,0.4);
+  }
+  /* Message */
+  #message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 3px 10px rgba(0,0,0,0.7);
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+  #message.show {
+    opacity: 1;
+  }
+  #hint {
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="uiLayer">
+    <div id="scoreBoard">
+      <div class="title">投篮挑战</div>
+      <div class="score" id="scoreVal">0</div>
+      <div class="stats" id="statsVal">命中 0 / 0</div>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="joystick">
+      <div id="joystickBase"></div>
+      <div id="joystickStick"></div>
+    </div>
+
+    <div id="powerBarWrap">
+      <div id="powerBarLabel">蓄力</div>
+      <div id="powerBar">
+        <div id="powerBarZones">
+          <div class="zone zone-red"></div>
+          <div class="zone zone-yellow"></div>
+          <div class="zone zone-green"></div>
+        </div>
+        <div id="powerFill"></div>
+      </div>
+    </div>
+
+    <div id="shootBtn">投篮</div>
+
+    <div id="hint">左侧摇杆移动人物 · 右侧按钮长按蓄力，松开投篮</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // -------- Canvas setup --------
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    DPR = Math.max(1, window.devicePixelRatio || 1);
+    W = canvas.clientWidth;
+    H = canvas.clientHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    layoutWorld();
+  }
+  window.addEventListener("resize", resize);
+
+  // -------- World layout (in CSS pixels) --------
+  const world = {
+    groundY: 0,        // 地面 y
+    playerStartX: 0,
+    hoopX: 0,          // 篮圈中心 x
+    hoopY: 0,          // 篮圈中心 y
+    playerMinX: 0,
+    playerMaxX: 0,
+  };
+
+  function layoutWorld() {
+    world.groundY = H * 0.78;
+    world.playerStartX = W * 0.18;
+    world.hoopX = W * 0.82;
+    world.hoopY = H * 0.32;
+    world.playerMinX = W * 0.05;
+    world.playerMaxX = W * 0.55;  // 人物不能越过中线太多
+    if (!player.placed) {
+      player.x = world.playerStartX;
+      player.y = world.groundY;
+      player.placed = true;
+    } else {
+      // clamp on resize
+      player.x = Math.min(world.playerMaxX, Math.max(world.playerMinX, player.x));
+      player.y = world.groundY;
+    }
+  }
+
+  // -------- Game state --------
+  const player = {
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    speed: 220, // px/sec
+    moving: false,
+    placed: false,
+    armAngle: 0,
+  };
+
+  const ball = {
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    r: 14,
+    flying: false,
+    scored: false,
+    settled: false,
+    spin: 0,
+    trail: [],
+  };
+
+  const game = {
+    power: 0,         // 0..100
+    charging: false,
+    powerDir: 1,      // 蓄力往返
+    score: 0,
+    makes: 0,
+    attempts: 0,
+    messageTimer: 0,
+    lastResult: "",
+    gravity: 1400,    // px/s^2
+    resetTimer: 0,
+  };
+
+  // -------- Input: Joystick --------
+  const joystick = {
+    active: false,
+    cx: 0, cy: 0,    // base center
+    radius: 70,
+    dx: 0, dy: 0,    // stick offset
+    pointerId: null,
+  };
+  const joystickEl = document.getElementById("joystick");
+  const stickEl = document.getElementById("joystickStick");
+
+  function setStickVisual() {
+    const maxOff = 44;
+    let nx = joystick.dx, ny = joystick.dy;
+    const len = Math.hypot(nx, ny);
+    if (len > maxOff) {
+      nx = nx / len * maxOff;
+      ny = ny / len * maxOff;
+    }
+    stickEl.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+  }
+
+  function joyStart(e) {
+    e.preventDefault();
+    const rect = joystickEl.getBoundingClientRect();
+    joystick.cx = rect.left + rect.width / 2;
+    joystick.cy = rect.top + rect.height / 2;
+    joystick.active = true;
+    joystick.pointerId = e.pointerId;
+    joyMove(e);
+  }
+  function joyMove(e) {
+    if (!joystick.active || e.pointerId !== joystick.pointerId) return;
+    e.preventDefault();
+    let dx = e.clientX - joystick.cx;
+    let dy = e.clientY - joystick.cy;
+    const len = Math.hypot(dx, dy);
+    if (len > joystick.radius) {
+      dx = dx / len * joystick.radius;
+      dy = dy / len * joystick.radius;
+    }
+    joystick.dx = dx;
+    joystick.dy = dy;
+    setStickVisual();
+  }
+  function joyEnd(e) {
+    if (e.pointerId !== joystick.pointerId) return;
+    joystick.active = false;
+    joystick.dx = 0;
+    joystick.dy = 0;
+    joystick.pointerId = null;
+    setStickVisual();
+  }
+  joystickEl.addEventListener("pointerdown", joyStart);
+  window.addEventListener("pointermove", joyMove);
+  window.addEventListener("pointerup", joyEnd);
+  window.addEventListener("pointercancel", joyEnd);
+
+  // -------- Input: Shoot button --------
+  const shootBtn = document.getElementById("shootBtn");
+  const powerFill = document.getElementById("powerFill");
+  const powerBar = document.getElementById("powerBar");
+
+  function shootStart(e) {
+    e.preventDefault();
+    if (ball.flying) return;
+    game.charging = true;
+    game.power = 0;
+    game.powerDir = 1;
+    shootBtn.classList.add("charging");
+  }
+  function shootEnd(e) {
+    if (!game.charging) return;
+    e.preventDefault();
+    game.charging = false;
+    shootBtn.classList.remove("charging");
+    releaseShot();
+  }
+  shootBtn.addEventListener("pointerdown", shootStart);
+  window.addEventListener("pointerup", shootEnd);
+  window.addEventListener("pointercancel", shootEnd);
+
+  // prevent context menu / long press
+  shootBtn.addEventListener("contextmenu", e => e.preventDefault());
+  joystickEl.addEventListener("contextmenu", e => e.preventDefault());
+
+  // -------- Color zones for power --------
+  // 0..30 red, 30..70 yellow, 70..100 green
+  function powerColor(p) {
+    if (p < 30) return { c: "#e53935", zone: "red" };
+    if (p < 70) return { c: "#fdd835", zone: "yellow" };
+    return { c: "#43a047", zone: "green" };
+  }
+
+  function updatePowerFill() {
+    powerFill.style.height = game.power + "%";
+    const pc = powerColor(game.power);
+    powerFill.style.background = `linear-gradient(to top, ${pc.c}cc, #ffffff)`;
+    powerFill.style.color = pc.c;
+  }
+
+  // -------- Shooting logic --------
+  function releaseShot() {
+    if (ball.flying) return;
+    const p = game.power;
+    const zone = powerColor(p).zone;
+
+    // 命中率
+    let hitChance = 0;
+    if (zone === "green") hitChance = 1.0;       // 100%
+    else if (zone === "yellow") hitChance = 0.8; // 80%
+    else hitChance = 0;                          // red 0%
+
+    // 人物移动时黄色降为 10%
+    if (player.moving && zone === "yellow") hitChance = 0.1;
+    // 红色保持 0；绿色保持 100%
+
+    const willScore = Math.random() < hitChance;
+
+    // 篮球起点：人物手部
+    const startX = player.x + 18;
+    const startY = player.y - 78;
+
+    // 目标：篮圈前沿稍偏内
+    const targetX = world.hoopX - 6;
+    const targetY = world.hoopY + 4;
+
+    // 飞行时间
+    const flightTime = 0.9; // seconds
+
+    // 计算完美初速度（抛物线）
+    const g = game.gravity;
+    const perfectVx = (targetX - startX) / flightTime;
+    const perfectVy = (targetY - startY - 0.5 * g * flightTime * flightTime) / flightTime;
+
+    if (willScore) {
+      ball.vx = perfectVx;
+      ball.vy = perfectVy;
+      ball.scored = true;
+    } else {
+      // 偏差：力度越大偏差可以略小，但红色完全没力 → 偏差很大
+      let errScale;
+      if (zone === "yellow") errScale = 0.18;
+      else if (zone === "red") errScale = 0.45;
+      else errScale = 0.25;
+      ball.vx = perfectVx + (Math.random() - 0.5) * 220 * errScale;
+      ball.vy = perfectVy + (Math.random() - 0.5) * 260 * errScale;
+      ball.scored = false;
+    }
+
+    ball.x = startX;
+    ball.y = startY;
+    ball.flying = true;
+    ball.settled = false;
+    ball.spin = 0;
+    ball.trail = [];
+    game.attempts++;
+    game.power = 0;
+    updatePowerFill();
+    updateScoreUI();
+    showMessage(zoneLabel(zone, willScore), 1100);
+  }
+
+  function zoneLabel(zone, scored) {
+    if (zone === "red") return "力度不足 ✗";
+    if (zone === "yellow") return scored ? "命中！" : "偏出 ✗";
+    return "完美进球！★";
+  }
+
+  function showMessage(text, ms) {
+    const el = document.getElementById("message");
+    el.textContent = text;
+    el.classList.add("show");
+    game.messageTimer = ms;
+  }
+
+  // -------- UI update --------
+  function updateScoreUI() {
+    document.getElementById("scoreVal").textContent = game.score;
+    document.getElementById("statsVal").textContent =
+      "命中 " + game.makes + " / " + game.attempts;
+  }
+
+  // -------- Update loop --------
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.04, (now - lastT) / 1000);
+    lastT = now;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt) {
+    // 蓄力往返
+    if (game.charging) {
+      game.power += game.powerDir * 95 * dt; // 每秒约95%
+      if (game.power >= 100) { game.power = 100; game.powerDir = -1; }
+      else if (game.power <= 0) { game.power = 0; game.powerDir = 1; }
+      updatePowerFill();
+    }
+
+    // 摇杆 → 玩家速度
+    let jx = 0, jy = 0;
+    if (joystick.active) {
+      const len = Math.hypot(joystick.dx, joystick.dy);
+      if (len > 8) {
+        jx = joystick.dx / joystick.radius;
+        jy = joystick.dy / joystick.radius;
+        const m = Math.hypot(jx, jy);
+        if (m > 1) { jx /= m; jy /= m; }
+      }
+    }
+    player.vx = jx * player.speed;
+    player.vy = jy * player.speed;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+    // 限制范围
+    player.x = Math.max(world.playerMinX, Math.min(world.playerMaxX, player.x));
+    player.y = Math.max(world.groundY - 80, Math.min(world.groundY, player.y));
+    player.moving = Math.hypot(player.vx, player.vy) > 5;
+
+    // 篮球飞行
+    if (ball.flying) {
+      ball.vy += game.gravity * dt;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+      ball.spin += ball.vx * dt * 0.04;
+      // trail
+      ball.trail.push({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 14) ball.trail.shift();
+
+      // 篮圈检测（中心点接近篮圈且向下运动）
+      const dx = ball.x - world.hoopX;
+      const dy = ball.y - (world.hoopY + 2);
+      if (!ball.settled && ball.vy > 0 && Math.abs(dx) < 12 && dy > -6 && dy < 10) {
+        if (ball.scored) {
+          game.score += (powerColor(game.lastPower || 0).zone === "green") ? 2 : 1;
+          game.makes++;
+          ball.settled = true;
+          showMessage("进球！+1", 900);
+          updateScoreUI();
+          // 让球穿过网
+          setTimeout(() => { resetBall(); }, 700);
+        } else {
+          // 不进球：弹开
+          ball.settled = true;
+          ball.vx = -Math.abs(ball.vx) * 0.4 - 60;
+          ball.vy = -Math.abs(ball.vy) * 0.5 - 200;
+          setTimeout(() => { resetBall(); }, 1200);
+        }
+      }
+      // 地面或出界
+      if (ball.y > H + 50 || ball.x < -50 || ball.x > W + 50) {
+        resetBall();
+      }
+    }
+
+    // message timer
+    if (game.messageTimer > 0) {
+      game.messageTimer -= dt * 1000;
+      if (game.messageTimer <= 0) {
+        document.getElementById("message").classList.remove("show");
+      }
+    }
+  }
+
+  function resetBall() {
+    ball.flying = false;
+    ball.settled = false;
+    ball.scored = false;
+    ball.trail = [];
+  }
+
+  // -------- Render --------
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    drawHoop();
+    drawPlayer();
+    if (ball.flying || ball.settled) drawBall();
+  }
+
+  function drawBackground() {
+    // 天空渐变
+    const sky = ctx.createLinearGradient(0, 0, 0, world.groundY);
+    sky.addColorStop(0, "#3a6fb0");
+    sky.addColorStop(1, "#9ec9e8");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, world.groundY);
+    // 远景山
+    ctx.fillStyle = "#5d8b6a";
+    ctx.beginPath();
+    ctx.moveTo(0, world.groundY);
+    ctx.lineTo(W * 0.2, world.groundY - 80);
+    ctx.lineTo(W * 0.35, world.groundY - 30);
+    ctx.lineTo(W * 0.5, world.groundY - 90);
+    ctx.lineTo(W * 0.7, world.groundY - 40);
+    ctx.lineTo(W * 0.9, world.groundY - 70);
+    ctx.lineTo(W, world.groundY - 20);
+    ctx.lineTo(W, world.groundY);
+    ctx.closePath();
+    ctx.fill();
+    // 地板
+    const floor = ctx.createLinearGradient(0, world.groundY, 0, H);
+    floor.addColorStop(0, "#c89a5b");
+    floor.addColorStop(1, "#8b6b3a");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, world.groundY, W, H - world.groundY);
+    // 地板线
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, world.groundY);
+    ctx.lineTo(W, world.groundY);
+    ctx.stroke();
+    // 三分线弧
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(world.hoopX - 30, world.groundY, 180, Math.PI, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawHoop() {
+    const x = world.hoopX, y = world.hoopY;
+    // 篮板支架
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x + 50, y - 8);
+    ctx.lineTo(x + 90, y - 8);
+    ctx.stroke();
+    // 篮板
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 3;
+    ctx.fillRect(x + 40, y - 50, 8, 80);
+    ctx.strokeRect(x + 40, y - 50, 8, 80);
+    // 篮板内框
+    ctx.strokeStyle = "#d33";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 42, y - 20, 4, 24);
+    // 篮圈
+    ctx.strokeStyle = "#ff8c00";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 22, 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // 网
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const sx = x + Math.cos(a) * 22;
+      const sy = y + Math.sin(a) * 6;
+      const ex = x + Math.cos(a) * 14;
+      const ey = y + 24;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    // 网横线
+    for (let r = 0; r < 3; r++) {
+      const t = (r + 1) / 4;
+      const ry = y + 6 + t * 18;
+      const rad = 22 - t * 8;
+      ctx.beginPath();
+      ctx.ellipse(x, ry, rad, rad * 0.27, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawPlayer() {
+    const x = player.x, y = player.y;
+    // 影子
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.ellipse(x, world.groundY + 4, 22, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 腿
+    ctx.strokeStyle = "#2a3b6b";
+    ctx.lineWidth = 7;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 6, y - 30);
+    ctx.lineTo(x - 8, y);
+    ctx.moveTo(x + 6, y - 30);
+    ctx.lineTo(x + 8, y);
+    ctx.stroke();
+    // 身体
+    ctx.fillStyle = "#e74c3c";
+    ctx.beginPath();
+    ctx.moveTo(x - 12, y - 60);
+    ctx.lineTo(x + 12, y - 60);
+    ctx.lineTo(x + 10, y - 30);
+    ctx.lineTo(x - 10, y - 30);
+    ctx.closePath();
+    ctx.fill();
+    // 球衣号码
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("23", x, y - 40);
+    // 头
+    ctx.fillStyle = "#f1c27d";
+    ctx.beginPath();
+    ctx.arc(x, y - 74, 12, 0, Math.PI * 2);
+    ctx.fill();
+    // 头发
+    ctx.fillStyle = "#3b2a1a";
+    ctx.beginPath();
+    ctx.arc(x, y - 78, 12, Math.PI, 0);
+    ctx.fill();
+    // 眼
+    ctx.fillStyle = "#222";
+    ctx.beginPath();
+    ctx.arc(x - 4, y - 74, 1.5, 0, Math.PI * 2);
+    ctx.arc(x + 4, y - 74, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 手臂（朝篮筐方向）
+    ctx.strokeStyle = "#f1c27d";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y - 55);
+    ctx.lineTo(x + 20, y - 78);
+    ctx.stroke();
+    // 另一只手
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y - 55);
+    ctx.lineTo(x - 18, y - 45);
+    ctx.stroke();
+
+    // 持球（未飞行时）
+    if (!ball.flying && !ball.settled) {
+      drawBasketball(x + 22, y - 82, 10, 0);
+    }
+  }
+
+  function drawBasketball(x, y, r, spin) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(spin);
+    // 阴影
+    const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    grad.addColorStop(0, "#ff9d3a");
+    grad.addColorStop(1, "#c75d10");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    // 线条
+    ctx.strokeStyle = "#3a1f0a";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.moveTo(-r, 0);
+    ctx.lineTo(r, 0);
+    strokeArc(0, 0, r, -Math.PI / 2, Math.PI / 2, true);
+    strokeArc(0, 0, r, Math.PI / 2, Math.PI * 3 / 2, true);
+    ctx.restore();
+
+    function strokeArc(cx, cy, rr, a1, a2, moveToStart) {
+      ctx.beginPath();
+      if (moveToStart) ctx.moveTo(cx + Math.cos(a1) * rr, cy + Math.sin(a1) * rr);
+      else ctx.moveTo(cx + Math.cos(a1) * rr, cy + Math.sin(a1) * rr);
+      ctx.arc(cx, cy, rr, a1, a2);
+      ctx.stroke();
+    }
+  }
+
+  function drawBall() {
+    // trail
+    if (ball.trail.length > 1) {
+      ctx.strokeStyle = "rgba(255,157,58,0.35)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let i = 0; i < ball.trail.length; i++) {
+        const p = ball.trail[i];
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+    drawBasketball(ball.x, ball.y, ball.r, ball.spin);
+  }
+
+  // -------- Init --------
+  resize();
+  updateScoreUI();
+  updatePowerFill();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
